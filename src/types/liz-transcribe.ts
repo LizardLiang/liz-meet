@@ -30,7 +30,7 @@ export interface Session {
   status: SessionStatus;
   speakerCount: number | null;
   source: AudioSource;
-  provider: 'assemblyai' | 'deepgram';
+  provider: 'assemblyai' | 'deepgram' | 'nvidia';
   rawAudioPath: string | null;
   noticeHashAtCreation: string | null;
 }
@@ -74,7 +74,7 @@ export interface SpeakerLabelOverride {
 export interface Settings {
   chunkSeconds: number;         // 5–15
   micDeviceId: number | null;   // -1 = default
-  provider: 'assemblyai' | 'deepgram';
+  provider: 'assemblyai' | 'deepgram' | 'nvidia';
   keepRawAudio: boolean;
   telemetryOptIn: boolean;
 }
@@ -82,7 +82,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   chunkSeconds: 10,
   micDeviceId: null,
-  provider: 'assemblyai',
+  provider: 'nvidia',
   keepRawAudio: false,
   telemetryOptIn: false,
 };

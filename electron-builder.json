@@ -6,6 +6,9 @@
   "directories": {
     "output": "release/${version}"
   },
+  "extraResources": [
+    { "from": "electron/asr/protos", "to": "protos" }
+  ],
   "files": [
     "dist",
     "dist-electron"

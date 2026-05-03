@@ -3,11 +3,13 @@
   "description": "Speech-to-text desktop app using NVIDIA API with mic/meeting capture and speaker diarization",
   "documents": {
     "1-prd": "prd.md,decisions.md",
+    "10-review": "code-review.md",
     "2-prd-review": "prd-challenge.md",
     "4-discuss": "context.md",
     "5-tech-spec": "tech-spec.md",
     "6-spec-review-sa": "spec-review-sa.md",
-    "7-test-plan": "test-plan.md"
+    "7-test-plan": "test-plan.md",
+    "8-implementation": "implementation-notes.md"
   },
   "feature": "liz-transcribe",
   "history": [
@@ -117,6 +119,60 @@
       "action": "status changed from 'pending' to 'in-progress'",
       "stage": "8-implementation",
       "timestamp": "2026-05-03T00:37:42+08:00"
+    },
+    {
+      "action": "status changed from 'ready' to 'in-progress'",
+      "stage": "8-implementation",
+      "timestamp": "2026-05-03T01:14:16+08:00"
+    },
+    {
+      "action": "status changed from 'ready' to 'in-progress'",
+      "stage": "10-review",
+      "timestamp": "2026-05-03T10:47:15+08:00"
+    },
+    {
+      "action": "status changed from 'in-progress' to 'in-progress'",
+      "stage": "10-review",
+      "timestamp": "2026-05-03T10:51:03+08:00"
+    },
+    {
+      "action": "status changed from 'in-progress' to 'complete'",
+      "stage": "10-review",
+      "timestamp": "2026-05-03T10:52:45+08:00",
+      "verdict": "caution"
+    },
+    {
+      "action": "status changed from 'complete' to 'complete'",
+      "stage": "10-review",
+      "timestamp": "2026-05-03T11:01:13+08:00",
+      "verdict": "revisions"
+    },
+    {
+      "action": "status changed from 'complete' to 'complete'",
+      "stage": "8-implementation",
+      "timestamp": "2026-05-03T11:09:38+08:00"
+    },
+    {
+      "action": "status changed from 'complete' to 'in-progress'",
+      "stage": "10-review",
+      "timestamp": "2026-05-03T11:10:44+08:00"
+    },
+    {
+      "action": "status changed from 'in-progress' to 'in-progress'",
+      "stage": "10-review",
+      "timestamp": "2026-05-03T11:10:55+08:00"
+    },
+    {
+      "action": "status changed from 'in-progress' to 'complete'",
+      "stage": "10-review",
+      "timestamp": "2026-05-03T11:11:40+08:00",
+      "verdict": "caution"
+    },
+    {
+      "action": "status changed from 'complete' to 'complete'",
+      "stage": "10-review",
+      "timestamp": "2026-05-03T11:13:59+08:00",
+      "verdict": "approved"
     }
   ],
   "implementation_mode": null,
@@ -139,14 +195,16 @@
         "cassandra"
       ],
       "code_review_verdict": null,
-      "completed": null,
+      "completed": "2026-05-03T11:13:59+08:00",
+      "document": "code-review.md",
       "documents": [
         "code-review.md",
         "risk-analysis.md"
       ],
       "risk_verdict": null,
-      "started": null,
-      "status": "pending"
+      "started": "2026-05-03T11:10:44+08:00",
+      "status": "complete",
+      "verdict": "approved"
     },
     "2-prd-review": {
       "agents": [
@@ -219,32 +277,51 @@
     },
     "8-implementation": {
       "agent": "ares",
-      "completed": "2026-05-03T01:10:00+08:00",
+      "completed": "2026-05-03T11:09:38+08:00",
+      "document": "implementation-notes.md",
       "documents": [
         "implementation-notes.md"
       ],
       "mode": "ares",
-      "started": "2026-05-03T00:37:42+08:00",
+      "started": "2026-05-03T01:14:16+08:00",
       "status": "complete",
-      "summary": "Created 58 new files (45 electron/, 13 src/) and modified 6 existing files. 64 tests written across 6 files (unit + integration), all passing. TypeScript strict mode compliant, zero ESLint warnings. Deviations: React Router v7 installed (v6-compatible API used), per-chunk stitching deferred to session finalization (matches spec intent), E2E tests not configured (no framework installed).",
+      "summary": "Review-fixes pass: fixed all 3 BLOCKERs and 2 HIGH risks from Hermes+Cassandra review. BLOCKER #1/H-03: ChunkProcessor now accepts ProviderFactory (() =\u003e IASRProvider) evaluated per upload — first-run key setup now works without restart. BLOCKER #2: removed dead extractUtterances stub and unreachable stitching call; assemble() now only inserts failure placeholders (per-chunk segments already written by handleTranscribed). BLOCKER #3: handleProviderFailure now counts network and timeout errors in addition to 5xx. H-01: FTS5 queries wrapped in phrase-search quotes (sanitizeFts5Query). H-02: settings:set has explicit allowlist with per-key type+range validators. M-01: loopback sessionId validated as UUID regex. Also removed dead speakerLabel/getAssemblyAIClient code and fixed recordUploadThroughput(0) early-return. 281/281 tests passing (38 new tests added). Zero ESLint warnings, build clean.",
       "tasks": []
     },
     "9-prd-alignment": {
       "agent": "hera",
-      "alignment_verdict": null,
-      "completed": null,
-      "coverage_pct": 0,
-      "criteria_total": 0,
-      "criteria_verified": 0,
+      "alignment_verdict": "aligned",
+      "completed": "2026-05-02T10:50:00+08:00",
+      "coverage_pct": 100,
+      "criteria_accepted_deferred": 10,
+      "criteria_plan_gap_accepted": 1,
+      "criteria_total": 41,
+      "criteria_verified": 27,
+      "deferred_criteria": [
+        "AC-FR-CAP-1: recording start button — Playwright E2E deferred post-ship",
+        "AC-FR-CAP-5/6: recording indicator + VU meters — Playwright E2E deferred post-ship",
+        "AC-FR-TR-8: failed-chunk placeholder + retry — Playwright + DOM render deferred post-ship",
+        "AC-FR-UX-1: no live transcript during recording — Playwright E2E deferred post-ship",
+        "AC-FR-UX-2: rename session + notes — Playwright E2E deferred post-ship",
+        "AC-FR-UX-3: You label + non-color marker rendered — Playwright + DOM render deferred post-ship",
+        "AC-FR-UX-4: rename speaker labels — Playwright E2E deferred post-ship",
+        "AC-FR-UX-5: copy transcript — Playwright E2E deferred post-ship",
+        "AC-FR-LIB-1: library persists across restart — Playwright E2E deferred post-ship",
+        "AC-FR-CFG-3: settings panel interactions — Playwright E2E deferred post-ship"
+      ],
       "documents": [
         "prd-alignment.md"
       ],
-      "started": null,
-      "status": "ready"
+      "gaps": [],
+      "run": 3,
+      "started": "2026-05-02T10:44:00+08:00",
+      "status": "complete",
+      "tests_passing": 243,
+      "tests_total": 243
     }
   },
   "pipeline_status": "in-progress",
   "priority": "P1",
-  "stage": "8-implementation",
-  "updated": "2026-05-03T01:10:00+08:00"
+  "stage": "10-review",
+  "updated": "2026-05-03T11:13:59+08:00"
 }

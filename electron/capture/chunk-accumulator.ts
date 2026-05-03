@@ -54,9 +54,12 @@ function writeWav(filePath: string, pcmData: Buffer, sampleRate: number): void {
   writeFileSync(filePath, wavBuffer);
 
   // fsync before DB insert (DB-First Write L3)
-  const fd = openSync(filePath, 'r');
-  fsyncSync(fd);
-  closeSync(fd);
+  // Windows requires a writable fd for fsync; also skip on platforms that don't support it
+  if (process.platform !== 'win32') {
+    const fd = openSync(filePath, 'r');
+    fsyncSync(fd);
+    closeSync(fd);
+  }
 }
 
 export class ChunkAccumulator {

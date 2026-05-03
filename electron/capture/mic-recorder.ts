@@ -19,9 +19,9 @@ interface NaudiodonModule {
   SampleFormat16Bit: number;
   getDevices(): NaudiodonDevice[];
 }
-// naudiodon2 is a native addon that must be require()'d — no ESM import
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const naudiodon = require('naudiodon2') as NaudiodonModule;
+// naudiodon2 is a native addon — use createRequire for ESM/CJS compatibility
+import { createRequire } from 'node:module';
+const naudiodon = createRequire(import.meta.url)('naudiodon2') as NaudiodonModule;
 
 export class MicRecorder {
   private audioIn: NaudiodonAudioStream | null = null;

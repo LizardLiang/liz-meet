@@ -13,7 +13,6 @@ import type { SettingsRepository } from '../db/settings-repository.js';
 import type { SessionStateMachine } from '../capture/session-state.js';
 import type { apiKeyService as ApiKeyServiceType } from '../services/api-key-service.js';
 import type { PrivacyService } from '../services/privacy-service.js';
-import type { AssemblyAIClient } from '../asr/assemblyai-client.js';
 import { runPreflight } from '../capture/preflight.js';
 import { NOTICE_VERSION_HASH, NOTICE_TEXT } from '../../src/constants/privacy-notice.js';
 import { notify } from './notifier.js';
@@ -34,16 +33,55 @@ interface HandlerDeps {
   privacyService: PrivacyService;
 }
 
-// Lazy-resolved API client (key may not exist at startup)
-async function getAssemblyAIClient(apiKeyService: HandlerDeps['apiKeyService']): Promise<AssemblyAIClient> {
-  const { AssemblyAIClient: AAIClient } = await import('../asr/assemblyai-client.js');
-  const key = apiKeyService.get();
-  return new AAIClient(key);
+// Sanitize filenames for dialog defaultPath (SUGGESTION: strip reserved names and ..)
+function sanitizeFileName(name: string): string {
+  const stripped = name.replace(/[/\\?%*:|"<>]/g, '-').replace(/^\.+/, '').slice(0, 60);
+  if (/^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i.test(stripped)) return `session-${stripped}`;
+  return stripped || 'session';
 }
 
-// Sanitize filenames for dialog defaultPath
-function sanitizeFileName(name: string): string {
-  return name.replace(/[/\\?%*:|"<>]/g, '-').slice(0, 60);
+// --- settings:set allowlist (H-02) ---
+// Maps each permitted settings key to a validator function.
+// Returning a non-null string means invalid; null means valid.
+type SettingsValidator = (v: unknown) => string | null;
+
+const SETTINGS_ALLOWLIST: Record<string, SettingsValidator> = {
+  chunk_seconds: (v) => {
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 5 || v > 120) {
+      return 'chunk_seconds must be an integer in [5, 120]';
+    }
+    return null;
+  },
+  mic_device_id: (v) => {
+    if (v !== null && (typeof v !== 'number' || !Number.isInteger(v))) {
+      return 'mic_device_id must be an integer or null';
+    }
+    return null;
+  },
+  provider: (v) => {
+    if (v !== 'assemblyai' && v !== 'deepgram' && v !== 'nvidia') {
+      return "provider must be 'assemblyai', 'deepgram', or 'nvidia'";
+    }
+    return null;
+  },
+  keep_raw_audio: (v) => {
+    if (typeof v !== 'boolean') return 'keep_raw_audio must be a boolean';
+    return null;
+  },
+  telemetry_opt_in: (v) => {
+    if (typeof v !== 'boolean') return 'telemetry_opt_in must be a boolean';
+    return null;
+  },
+};
+
+function validateSettingsKeyValue(key: string, value: unknown): { ok: true } | { ok: false; message: string } {
+  const validator = SETTINGS_ALLOWLIST[key];
+  if (!validator) {
+    return { ok: false, message: `Unknown settings key: '${key}'` };
+  }
+  const err = validator(value);
+  if (err) return { ok: false, message: err };
+  return { ok: true };
 }
 
 function renderText(segments: ReturnType<SegmentRepository['findBySessionId']>, overrides: Map<string, string>): string {
@@ -246,6 +284,10 @@ export function registerHandlers(deps: HandlerDeps): void {
   ipcMain.handle(
     CHANNELS.SETTINGS_SET,
     withErrorWrapper(CHANNELS.SETTINGS_SET, (_event, { key, value }: { key: string; value: unknown }) => {
+      const validation = validateSettingsKeyValue(key, value);
+      if (!validation.ok) {
+        throw Object.assign(new Error(validation.message), { code: 'invalid_argument' });
+      }
       settingsRepo.set(key, value);
       return { ok: true };
     }),
@@ -268,9 +310,14 @@ export function registerHandlers(deps: HandlerDeps): void {
   ipcMain.handle(
     CHANNELS.APIKEY_TEST,
     withErrorWrapper(CHANNELS.APIKEY_TEST, async (_event, { key }: { key: string }) => {
+      const providerName = (settingsRepo.get('provider') as string) ?? 'assemblyai';
+      if (providerName === 'nvidia') {
+        const { NvidiaNimClient } = await import('../asr/nvidia-nim-client.js');
+        const { getProtoPath } = await import('../asr/proto-path.js');
+        return new NvidiaNimClient(key, getProtoPath()).testConnection();
+      }
       const { AssemblyAIClient: AAIClient } = await import('../asr/assemblyai-client.js');
-      const client = new AAIClient(key);
-      return client.testConnection();
+      return new AAIClient(key).testConnection();
     }),
   );
 
@@ -363,7 +410,5 @@ export function registerHandlers(deps: HandlerDeps): void {
     }),
   );
 
-  // Import (used in TEST mode only)
-  void getAssemblyAIClient;
   logger.info({ event: 'ipc_handlers_registered' });
 }

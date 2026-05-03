@@ -10,6 +10,7 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const [chunkSeconds, setChunkSeconds] = useState(10);
   const [keepRawAudio, setKeepRawAudio] = useState(false);
+  const [provider, setProvider] = useState<'assemblyai' | 'nvidia'>('nvidia');
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -18,9 +19,11 @@ export default function SettingsPage() {
     Promise.all([
       invokeIpc<number>('settings:get', { key: 'chunk_seconds' }),
       invokeIpc<boolean>('settings:get', { key: 'keep_raw_audio' }),
-    ]).then(([cs, kra]) => {
+      invokeIpc<string>('settings:get', { key: 'provider' }),
+    ]).then(([cs, kra, prov]) => {
       if (cs) setChunkSeconds(cs);
       setKeepRawAudio(!!kra);
+      if (prov === 'assemblyai' || prov === 'nvidia') setProvider(prov);
     }).catch(() => void 0);
   }, []);
 
@@ -30,6 +33,7 @@ export default function SettingsPage() {
       await Promise.all([
         invokeIpc('settings:set', { key: 'chunk_seconds', value: chunkSeconds }),
         invokeIpc('settings:set', { key: 'keep_raw_audio', value: keepRawAudio }),
+        invokeIpc('settings:set', { key: 'provider', value: provider }),
       ]);
     } catch {
       // error
@@ -82,6 +86,25 @@ export default function SettingsPage() {
             <div className="flex justify-between text-xs text-base-content/50 mt-1">
               <span>5s</span><span>15s</span>
             </div>
+          </div>
+
+          <div className="form-control mb-4">
+            <label className="label">
+              <span className="label-text">Transcription provider</span>
+            </label>
+            <select
+              className="select select-bordered w-full max-w-xs"
+              value={provider}
+              onChange={e => setProvider(e.target.value as 'assemblyai' | 'nvidia')}
+            >
+              <option value="nvidia">NVIDIA NIM (Parakeet)</option>
+              <option value="assemblyai">AssemblyAI</option>
+            </select>
+            <label className="label">
+              <span className="label-text-alt text-base-content/60">
+                After switching providers, paste the matching API key below.
+              </span>
+            </label>
           </div>
 
           <div className="form-control mb-4">

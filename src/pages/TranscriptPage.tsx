@@ -8,6 +8,7 @@ import SpeakerLabelEditor from '../components/SpeakerLabelEditor.js';
 import SessionHeader from '../components/SessionHeader.js';
 import CopyButton from '../components/CopyButton.js';
 import ExportMenu from '../components/ExportMenu.js';
+import RecordingUI from '../components/RecordingUI.js';
 import { invokeIpc, onPush } from '../lib/ipc.js';
 import type { Session, Segment, SessionStatus } from '../types/liz-transcribe.js';
 
@@ -99,7 +100,8 @@ export default function TranscriptPage() {
     );
   }
 
-  const isProcessing = session.status === 'processing' || session.status === 'recording';
+  const isLive = session.status === 'recording' || session.status === 'paused';
+  const isProcessing = session.status === 'processing';
 
   // Collect unique speaker labels
   const speakerLabels = Array.from(new Set(segments.map(s => s.speakerLabel)));
@@ -143,6 +145,13 @@ export default function TranscriptPage() {
           </div>
         )}
       </div>
+
+      {/* Live recording controls */}
+      {isLive && (
+        <div className="px-6 pt-4">
+          <RecordingUI sessionId={session.id} initialStatus={session.status} />
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-4">

@@ -69,3 +69,100 @@
 
 ## Final Resolution
 <!-- Athena updates this after all reviews are resolved -->
+
+---
+
+## PRD Alignment (Hera) — 2026-05-03
+
+Verdict: **GAPS**. Coverage: 8/41 criteria verified (20%).
+
+| Criterion | Status | Gap |
+|-----------|--------|-----|
+| FR-CAP-1 (start recording) | gaps | E2E not configured; no test verifies button or 500ms transition |
+| FR-CAP-2 (dual-stream capture) | gaps | Integration tests for ChunkAccumulator/dual-stream not written |
+| FR-CAP-3/4 (mic-only / system-only) | gaps | Integration tests INT-004/INT-005 not written |
+| FR-CAP-7 (preflight warnings) | gaps | UNIT-031/032 not written |
+| FR-CAP-8 (pause/resume + error states) | gaps | session-state.ts unit tests not written; E2E not configured |
+| FR-CAP-9 (stop transition) | gaps | UNIT-019 not written; E2E not configured |
+| FR-TR-1 (10s chunking + DB-First L3) | gaps | chunk-accumulator.ts tests not written |
+| FR-TR-2 (upload pipeline) | gaps | chunk-processor.ts integration tests not written |
+| FR-TR-3 status enum + toasts | gaps | UNIT-051 + INT-012 not written |
+| FR-TR-3 provider banner | gaps | UNIT-047 not written |
+| FR-TR-4 (merged transcript) | gaps | session-finalizer.ts unit tests not written |
+| FR-TR-6 (timestamps) | gaps | UNIT-041 not written |
+| FR-TR-7 (You label in UI) | gaps | No React component unit test; E2E not configured |
+| FR-TR-8 (failed placeholder + retry) | gaps | UNIT-046 not written |
+| FR-UX-1 (no live transcript) | gaps | E2E not configured |
+| FR-UX-3 (You label + non-color marker) | gaps | No React component test |
+| FR-UX-6 (export txt/md/json) | gaps | UNIT-048–050 not written |
+| FR-LIB-1 (library persists) | gaps | E2E not configured |
+| FR-LIB-2 (session card fields + badges) | gaps | UNIT-051 not written |
+| FR-LIB-3 XSS safety (SearchBar) | gaps | UNIT-053–055 not written |
+| FR-LIB-4 (date/status filter) | gaps | INT-016/017 not written |
+| FR-LIB-5 (delete session + files) | gaps | Audio file deletion not tested |
+| FR-CFG-1 (first-run gate) | gaps | UNIT-101–104 not written; E2E not configured |
+| FR-CFG-2 (safeStorage) | gaps | api-key-service.ts unit tests not written |
+| FR-CFG-4 (audio retention) | gaps | UNIT-058/059 not written |
+| §5.3.1 (privacy notice + ack) | gaps | privacy-service.ts tests not written; E2E not configured |
+| §5.2 (crash recovery) | gaps | recovery.ts integration tests not written |
+| FR-TR-2-FALLBACK (full-session upload) | gaps | INT-013 not written |
+| FR-TR-2 slow network badge | gaps | INT-009 partial; metered network behavior unverified |
+
+**Action**: Stage 8-implementation returned to ready. Ares must write the missing test cases before re-alignment.
+
+### PRD Alignment Re-run (Hera, Run 2) — 2026-05-03
+
+Ares added 138 tests (202 total, all passing), closing 21 of 29 prior blockers. Coverage rose from 20% to 56% (23/41 criteria verified).
+
+| Criterion | Status | Gap |
+|-----------|--------|-----|
+| AC-FR-CAP-1 | gaps | E2E not configured |
+| AC-FR-CAP-2 | gaps | INT-001–006 (dual-stream integration) not written |
+| AC-FR-CAP-3/4 | gaps | INT-004/005 (mic-only / system-only) not written |
+| AC-FR-CAP-5/6 | gaps | E2E not configured |
+| AC-FR-TR-7 (mergeStreams) | gaps | UNIT-042–046 absent from codebase; mergeStreams untested |
+| AC-FR-TR-8 | gaps | Failed-chunk placeholder test missing; E2E not configured |
+| AC-FR-UX-1 | gaps | E2E not configured |
+| AC-FR-UX-2 | gaps | E2E not configured |
+| AC-FR-UX-3 | gaps | React DOM tests deferred; E2E not configured |
+| AC-FR-UX-4 | gaps | E2E not configured |
+| AC-FR-UX-5 | gaps | E2E not configured |
+| AC-FR-LIB-1 | gaps | E2E not configured |
+| AC-FR-TR-2-slow | gaps | No metered-network badge test |
+| AC-FR-CFG-3 | gaps | E2E not configured |
+| GATE-001 | plan_gap | Deferred by design; both paths built and feature-flagged |
+
+**Minimum required before next re-alignment**: UNIT-042–046 (mergeStreams unit tests) and metered-network badge test. E2E may be deferred with formal test-plan revision.
+
+**Action**: Stage 8-implementation returned to ready.
+
+### PRD Alignment Final Run (Hera, Run 3) — 2026-05-02
+
+Ares closed all remaining unit/integration blockers (41 new tests, 243 total, all passing). The 10 remaining criteria requiring Playwright E2E or React DOM render tests were formally deferred to post-ship by explicit user decision. Verdict upgraded to ALIGNED.
+
+| Criterion | Status | Note |
+|-----------|--------|------|
+| AC-FR-CAP-2 | verified | dual-stream-capture.test.ts (INT-001–006) |
+| AC-FR-CAP-3/4 | verified | dual-stream-capture.test.ts (INT-004/005) |
+| AC-FR-TR-7 (mergeStreams) | verified | merge-streams.test.ts (UNIT-042–046) |
+| AC-FR-TR-2-slow | verified | slow-uplink-badge.test.ts |
+| AC-FR-CAP-1 | accepted-deferred | Playwright E2E — post-ship |
+| AC-FR-CAP-5/6 | accepted-deferred | Playwright E2E — post-ship |
+| AC-FR-TR-8 | accepted-deferred | Playwright + DOM render — post-ship |
+| AC-FR-UX-1 | accepted-deferred | Playwright E2E — post-ship |
+| AC-FR-UX-2 | accepted-deferred | Playwright E2E — post-ship |
+| AC-FR-UX-3 | accepted-deferred | Playwright + DOM render — post-ship |
+| AC-FR-UX-4 | accepted-deferred | Playwright E2E — post-ship |
+| AC-FR-UX-5 | accepted-deferred | Playwright E2E — post-ship |
+| AC-FR-LIB-1 | accepted-deferred | Playwright E2E — post-ship |
+| AC-FR-CFG-3 | accepted-deferred | Playwright E2E — post-ship |
+
+**Action**: Stage 9 complete. Stage 10 (Hermes + Cassandra) set to ready.
+
+### Code Review (Hermes) — 2026-05-03
+
+| Finding | Tier | Rationale | Required Fix |
+|---------|------|-----------|--------------|
+| electron/main.ts:60–72 — Stale ASR provider client never refreshes after API-key change | Tier 1 — Correct | `getProvider()` runs twice synchronously at bootstrap; the resulting `AssemblyAIClient` is captured by `ChunkProcessor` and `TranscriptAssembler` and never replaced. First-run flow (no key at startup) and key rotation (Settings → Update API key) both result in uploads using a stale or empty key. The PRD/spec contract that recording is enabled once `apikey:exists` is true is broken — the renderer's pre-flight passes but uploads silently 401. | Restructure provider injection: pass a factory `() => IASRProvider` to `ChunkProcessor` so the apiKey is resolved per request, OR add a `setProvider()` setter on `ChunkProcessor`/`TranscriptAssembler` and invoke it from the `apikey:set` handler. Whichever option is chosen, add a test that `apikey:set` followed by a chunk-pickup uses the new key. |
+| electron/asr/transcript-assembler.ts:96–105 — `extractUtterances` is a permanent stub; cross-chunk stitching is dead code | Tier 1 — Correct | `extractUtterances(chunks)` returns `chunks.map(() => [])`, so the two `if (...flat().length > 0)` guards in `assemble()` always evaluate false. The `stitchStreamLabels` algorithm — whose pseudocode the tech spec §4.7.1 was rewritten in r2 to satisfy Apollo's CONCERNS — is never exercised in the runtime path. Per-chunk segments are written by `ChunkProcessor.handleTranscribed` using raw provider labels, so the same physical speaker can appear as `A` in chunk N and `B` in chunk N+1. Implementation-notes Deviation #1 acknowledges the runtime path differs from the pseudocode but does not call out that the stitching pass never runs. | Choose one: (a) wire `extractUtterances` to read AssemblyAI utterance JSON cached during `pollTranscript` (today it is dropped after segments are inserted); have `assemble()` delete the previously-inserted segments and replace them with stitched ones; OR (b) delete `assemble()` and the entire `transcript-assembler.ts` cross-chunk path, accept per-chunk speaker labels as the v1 product, and update the tech spec §4.7.1 + PRD §11.3 to match. Option (a) preserves the spec contract but is 1–2 days of work + tests; option (b) is hours but requires PRD revision. |
+| electron/asr/chunk-processor.ts:160–162 — Provider-banner counter only triggers on 5xx; network/timeout never increment | Tier 1 — Correct | `handleProviderFailure()` is gated by `if (provErr?.code === 'provider_5xx')`. The most common provider-unreachable conditions (DNS failure, connection reset, timeout) classify as `network` or `timeout` and never increment `consecutiveFailed`. PRD FR-TR-2 / spec §4.4.1 promises an "ASR provider unreachable" banner after 3 consecutive failures, but in practice the banner only shows during a 5xx outage, not when the user's network is flapping. The existing `provider-banner.test.ts` only tests `provider_5xx`, masking the bug. | Change the gate to: `if (provErr && (provErr.code === 'provider_5xx' \|\| provErr.code === 'network' \|\| provErr.code === 'timeout'))`. `auth_failed` and `bad_request` must remain excluded (existing test on chunk-processor.test.ts:41 confirms 401 should not trigger the banner). Add tests covering `network` and `timeout` paths through the banner counter. |

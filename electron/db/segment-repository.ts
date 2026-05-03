@@ -69,12 +69,28 @@ export class SegmentRepository {
   }
 
   /**
+   * Sanitize a FTS5 query string to prevent injection and event-loop blocking.
+   * - Enforces max 200-char length.
+   * - Escapes FTS5 special characters by wrapping the entire input in double-quotes,
+   *   which forces FTS5 to treat it as a literal phrase search. Internal double-quotes
+   *   are escaped per the FTS5 spec (doubled: "" → literal ").
+   */
+  private sanitizeFts5Query(raw: string): string {
+    if (raw.length > 200) raw = raw.slice(0, 200);
+    // Wrap in double-quotes for a phrase search; escape any embedded quotes.
+    const escaped = raw.replace(/"/g, '""');
+    return `"${escaped}"`;
+  }
+
+  /**
    * FTS5 full-text search.
    * Uses STX (U+0002) and ETX (U+0003) as highlight markers — NOT HTML.
    * The renderer splits on those control characters and renders <mark> JSX.
+   * Query is sanitized before passing to FTS5 MATCH (H-01).
    */
   search(query: string, options: SearchOptions = {}): SearchResult[] {
     const limit = options.limit ?? 50;
+    query = this.sanitizeFts5Query(query);
     // snippet(segments_fts, 0, STX, ETX, '...', 32) extracts ±2 word context
     const STX = '';
     const ETX = '';

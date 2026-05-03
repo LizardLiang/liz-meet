@@ -9,7 +9,7 @@ import { mapSession } from './mappers.js';
 export interface CreateSessionInput {
   title: string;
   source: AudioSource;
-  provider?: 'assemblyai' | 'deepgram';
+  provider?: 'assemblyai' | 'deepgram' | 'nvidia';
   noticeHashAtCreation?: string;
 }
 
@@ -36,7 +36,7 @@ export class SessionRepository {
         id,
         title: input.title,
         source: input.source,
-        provider: input.provider ?? 'assemblyai',
+        provider: input.provider ?? 'nvidia',
         createdAt: now,
         startedAt: now,
         noticeHash: input.noticeHashAtCreation ?? null,

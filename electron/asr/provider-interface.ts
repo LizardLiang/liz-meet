@@ -27,7 +27,7 @@ export interface TranscriptResult {
 }
 
 export interface IASRProvider {
-  readonly name: 'assemblyai' | 'deepgram';
+  readonly name: 'assemblyai' | 'deepgram' | 'nvidia';
   uploadChunk(filePath: string, signal?: AbortSignal): Promise<string>;
   submitTranscript(
     audioUrl: string,

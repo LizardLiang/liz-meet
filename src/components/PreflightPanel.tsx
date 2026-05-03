@@ -16,6 +16,7 @@ export default function PreflightPanel() {
   const [systemVu, setSystemVu] = useState(-100);
   const [title, setTitle] = useState('');
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   useEffect(() => {
     invokeIpc<boolean>('apikey:exists').then(exists => setApiKeyExists(exists)).catch(() => void 0);
@@ -39,14 +40,16 @@ export default function PreflightPanel() {
   const handleStart = async () => {
     if (!canStart) return;
     setStarting(true);
+    setStartError(null);
     try {
       const result = await invokeIpc<{ sessionId: string }>('capture:start', {
         title: title.trim() || `Session ${new Date().toLocaleString()}`,
         source,
       });
-      navigate(`/session/${result.sessionId}?recording=1`);
-    } catch {
+      navigate(`/recording?session=${result.sessionId}&recording=1`);
+    } catch (err) {
       setStarting(false);
+      setStartError(err instanceof Error ? err.message : 'Failed to start recording');
     }
   };
 
@@ -94,6 +97,11 @@ export default function PreflightPanel() {
         {!apiKeyExists && (
           <div className="alert alert-warning">
             <span>No API key configured. Go to Settings to add one.</span>
+          </div>
+        )}
+        {startError && (
+          <div className="alert alert-error">
+            <span>{startError}</span>
           </div>
         )}
 

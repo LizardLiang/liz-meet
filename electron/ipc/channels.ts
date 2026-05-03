@@ -62,6 +62,7 @@ export const PUSH_CHANNELS = {
   CAPTURE_VU_UPDATE_SYSTEM: 'capture:vu-update-system',
   CAPTURE_DEVICE_EVENT:   'capture:device-event',
   ASR_PROVIDER_BANNER:    'asr:provider-banner',
+  ASR_UPLOAD_SLOW:        'asr:upload-slow',
 } as const;
 
 export type PushChannelName = (typeof PUSH_CHANNELS)[keyof typeof PUSH_CHANNELS];
@@ -216,6 +217,7 @@ export interface PushChannelPayloadMap {
     errorCode?: number;
   };
   [PUSH_CHANNELS.ASR_PROVIDER_BANNER]: { visible: boolean };
+  [PUSH_CHANNELS.ASR_UPLOAD_SLOW]: { visible: boolean };
 }
 
 // Wrapped result types (used by renderer after withErrorWrapper)

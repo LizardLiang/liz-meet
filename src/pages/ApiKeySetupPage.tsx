@@ -1,17 +1,30 @@
 // src/pages/ApiKeySetupPage.tsx
 // API key entry screen (Phase 5).
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { invokeIpc } from '../lib/ipc.js';
 
 type TestStatus = 'idle' | 'testing' | 'success' | 'offline-warning' | 'invalid';
 
+const PROVIDER_LABELS: Record<string, { name: string; placeholder: string; dashboardUrl: string }> = {
+  nvidia:      { name: 'NVIDIA NIM',   placeholder: 'Paste your NVIDIA API key (nvapi-...)',   dashboardUrl: 'https://build.nvidia.com' },
+  assemblyai:  { name: 'AssemblyAI',   placeholder: 'Paste your AssemblyAI API key',           dashboardUrl: 'https://www.assemblyai.com/dashboard' },
+  deepgram:    { name: 'Deepgram',     placeholder: 'Paste your Deepgram API key',             dashboardUrl: 'https://console.deepgram.com' },
+};
+
 export default function ApiKeySetupPage() {
   const [key, setKey] = useState('');
   const [testStatus, setTestStatus] = useState<TestStatus>('idle');
   const [saving, setSaving] = useState(false);
+  const [provider, setProvider] = useState('nvidia');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    invokeIpc<string>('settings:get', { key: 'provider' })
+      .then(p => { if (p) setProvider(p); })
+      .catch(() => {});
+  }, []);
 
   const isKeyFormatValid = key.trim().length >= 10;
 
@@ -46,15 +59,17 @@ export default function ApiKeySetupPage() {
     }
   };
 
+  const providerInfo = PROVIDER_LABELS[provider] ?? PROVIDER_LABELS['assemblyai'];
+
   return (
     <div className="min-h-screen bg-base-100 text-base-content flex flex-col items-center justify-center p-8">
       <div className="card bg-base-200 shadow-xl w-full max-w-lg">
         <div className="card-body">
-          <h1 className="card-title text-2xl mb-2">AssemblyAI API Key</h1>
+          <h1 className="card-title text-2xl mb-2">{providerInfo.name} API Key</h1>
           <p className="text-base-content/70 mb-6">
-            Enter your AssemblyAI API key to enable transcription.{' '}
+            Enter your {providerInfo.name} API key to enable transcription.{' '}
             <a
-              href="https://www.assemblyai.com/dashboard"
+              href={providerInfo.dashboardUrl}
               target="_blank"
               rel="noreferrer"
               className="link link-primary"
@@ -70,7 +85,7 @@ export default function ApiKeySetupPage() {
             <input
               type="password"
               className="input input-bordered w-full"
-              placeholder="Paste your AssemblyAI API key"
+              placeholder={providerInfo.placeholder}
               value={key}
               onChange={e => setKey(e.target.value)}
             />

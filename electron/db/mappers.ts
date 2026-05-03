@@ -73,7 +73,7 @@ export function mapSession(row: RawSession): Session {
     status: row.status as SessionStatus,
     speakerCount: row.speaker_count,
     source: row.source as AudioSource,
-    provider: row.provider as 'assemblyai' | 'deepgram',
+    provider: row.provider as 'assemblyai' | 'deepgram' | 'nvidia',
     rawAudioPath: row.raw_audio_path,
     noticeHashAtCreation: row.notice_hash_at_creation,
   };

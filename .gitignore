@@ -27,3 +27,13 @@ dist-ssr
 release
 
 .env
+.env.*
+!.env.example
+
+# Local Claude Code settings (permissions, not source of truth)
+.claude/settings.local.json
+.claude/tmp/
+.claude/.Arena/
+
+# Sample/test media and generated transcripts
+scripts/samples/

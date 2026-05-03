@@ -8,7 +8,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
+// In dev, migrations live in the source tree. In packaged builds they are
+// copied alongside the bundle under dist-electron/migrations/.
+const MIGRATIONS_DIR = process.env['APP_ROOT']
+  ? path.join(process.env['APP_ROOT'], 'electron', 'db', 'migrations')
+  : path.join(__dirname, 'migrations');
 
 export function runMigrations(db: Database.Database): void {
   // Ensure schema_version table exists so we can query it safely

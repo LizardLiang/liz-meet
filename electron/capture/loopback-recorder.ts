@@ -44,6 +44,12 @@ export class LoopbackRecorder {
   }): { ok: boolean; error?: { code: string } } {
     if (!this.active) return { ok: false, error: { code: 'not_recording' } };
 
+    // Validate sessionId is a UUID to prevent path traversal (M-01)
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(payload.sessionId)) {
+      logger.warn({ event: 'loopback_invalid_session_id', seq: payload.seq });
+      return { ok: false, error: { code: 'invalid_session_id' } };
+    }
+
     if (payload.buffer.byteLength > MAX_LOOPBACK_CHUNK_BYTES) {
       logger.warn({ event: 'loopback_chunk_oversize', seq: payload.seq });
       return { ok: false, error: { code: 'chunk_too_large' } };
@@ -65,9 +71,12 @@ export class LoopbackRecorder {
     writeFileSync(filePath, buffer);
 
     // fsync before DB insert (DB-First Write L3)
-    const fd = openSync(filePath, 'r');
-    fsyncSync(fd);
-    closeSync(fd);
+    // Windows does not support fsync on a read-only fd
+    if (process.platform !== 'win32') {
+      const fd = openSync(filePath, 'r');
+      fsyncSync(fd);
+      closeSync(fd);
+    }
 
     // Insert chunks row
     this.chunkRepo.create({

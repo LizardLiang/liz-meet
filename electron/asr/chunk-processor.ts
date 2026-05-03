@@ -9,6 +9,7 @@ import type { IASRProvider, RawUtterance } from './provider-interface.js';
 import type { SessionFinalizer } from './session-finalizer.js';
 import type { BrowserWindow } from 'electron';
 import type { Chunk, Stream } from '../../src/types/liz-transcribe.js';
+import { statSync } from 'node:fs';
 import { ProviderError } from './provider-errors.js';
 import { shouldRetry, waitForRetry } from './retry-policy.js';
 import { notify } from '../ipc/notifier.js';
@@ -16,11 +17,20 @@ import { PUSH_CHANNELS } from '../ipc/channels.js';
 import { logger } from '../logging/logger.js';
 import { classifyHttpError } from './provider-errors.js';
 
+/** Factory that returns a fresh IASRProvider on each call. */
+export type ProviderFactory = () => IASRProvider;
+
 const TICK_INTERVAL_MS     = 2_000;   // L3: 2 s DB poll
 const MIN_POLL_INTERVAL_MS = 3_000;   // per-chunk transcript-poll cadence
 const POLL_HTTP_TIMEOUT_MS = 10_000;  // per-call HTTP timeout
 const UPLOAD_CONCURRENCY   = Number(process.env['LIZMEET_UPLOAD_CONCURRENCY'] ?? 3);
 const PROVIDER_UNREACHABLE_THRESHOLD = 3;
+
+// Slow-network badge (FR-TR-2): "Uploading slowly" when sustained uplink < 5 Mbps.
+// 5 Mbps = 625,000 bytes/second.
+const SLOW_UPLINK_BYTES_PER_SEC = 625_000;  // 5 Mbps in bytes/sec
+const SLOW_UPLINK_WINDOW        = 3;        // consecutive slow uploads before badge shown
+const SLOW_UPLINK_CLEAR_WINDOW  = 3;        // consecutive fast uploads to clear badge
 
 export class ChunkProcessor {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -33,12 +43,16 @@ export class ChunkProcessor {
   private providerBannerVisible = false;
   /** 429 throttle: epoch-ms until which we throttle */
   private throttleUntil = 0;
+  /** Slow-uplink badge tracking (FR-TR-2) */
+  private consecutiveSlowUploads = 0;
+  private consecutiveFastUploads = 0;
+  private slowBadgeVisible = false;
 
   constructor(
     private chunkRepo: ChunkRepository,
     private segmentRepo: SegmentRepository,
     private readonly _sessionRepo: SessionRepository,
-    private provider: IASRProvider,
+    private providerFactory: ProviderFactory,
     private finalizer: SessionFinalizer,
     private win: BrowserWindow,
   ) {
@@ -117,10 +131,22 @@ export class ChunkProcessor {
       try {
         if (attempt > 0) await waitForRetry(attempt);
 
-        const uploadUrl = await this.provider.uploadChunk(chunk.filePath, signal);
+        // Resolve provider on each attempt so that a key set after bootstrap is used.
+        const provider = this.providerFactory();
+
+        // Measure file size for uplink-speed badge (FR-TR-2)
+        let fileSizeBytes = 0;
+        try { fileSizeBytes = statSync(chunk.filePath).size; } catch { /* file may not exist in tests */ }
+        const uploadStart = Date.now();
+
+        const uploadUrl = await provider.uploadChunk(chunk.filePath, signal);
         this.chunkRepo.setUploadUrl(chunk.id, uploadUrl);
 
-        const transcriptId = await this.provider.submitTranscript(
+        // Record upload throughput after first attempt
+        const uploadDurationMs = Math.max(1, Date.now() - uploadStart);
+        this.recordUploadThroughput(fileSizeBytes, uploadDurationMs);
+
+        const transcriptId = await provider.submitTranscript(
           uploadUrl,
           { speakerLabels: true, languageCode: 'en_us' },
           signal,
@@ -137,8 +163,8 @@ export class ChunkProcessor {
         const provErr = err instanceof ProviderError ? err : null;
         const statusCode = provErr?.status ?? 0;
 
-        // Count 5xx for banner
-        if (provErr?.code === 'provider_5xx') {
+        // Count provider-unreachable codes for banner (5xx, network flapping, DNS/timeout)
+        if (provErr && (provErr.code === 'provider_5xx' || provErr.code === 'network' || provErr.code === 'timeout')) {
           this.handleProviderFailure();
         }
 
@@ -162,7 +188,8 @@ export class ChunkProcessor {
   private async pollTranscript(chunk: Chunk): Promise<void> {
     const signal = AbortSignal.timeout(POLL_HTTP_TIMEOUT_MS);
     try {
-      const result = await this.provider.pollTranscript(chunk.transcriptId!, signal);
+      const provider = this.providerFactory();
+      const result = await provider.pollTranscript(chunk.transcriptId!, signal);
 
       if (result.status === 'completed') {
         await this.handleTranscribed(chunk, result.utterances ?? []);
@@ -195,7 +222,6 @@ export class ChunkProcessor {
 
     if (rawUtterances.length > 0) {
       const stream: Stream = chunk.stream;
-      const speakerLabel = stream === 'mic' ? 'You' : rawUtterances[0].speakerLabel;
       this.segmentRepo.bulkInsert(
         rawUtterances.map(u => ({
           sessionId: chunk.sessionId,
@@ -209,7 +235,6 @@ export class ChunkProcessor {
           isFailedPlaceholder: false,
         })),
       );
-      void speakerLabel; // used above
     }
 
     this.chunkRepo.updateStatus(chunk.id, 'transcribed');
@@ -250,6 +275,45 @@ export class ChunkProcessor {
     ) {
       this.providerBannerVisible = true;
       notify(this.win, PUSH_CHANNELS.ASR_PROVIDER_BANNER, { visible: true });
+    }
+  }
+
+  /**
+   * Record the throughput of a completed upload and update the slow-uplink badge.
+   * FR-TR-2: emit ASR_UPLOAD_SLOW when sustained uplink < 5 Mbps.
+   */
+  recordUploadThroughput(fileSizeBytes: number, durationMs: number): void {
+    if (fileSizeBytes <= 0) return; // unknown size (stat failed) — don't update either counter
+    const bytesPerSec = (fileSizeBytes / durationMs) * 1000;
+    const isSlow = bytesPerSec < SLOW_UPLINK_BYTES_PER_SEC;
+
+    if (isSlow) {
+      this.consecutiveSlowUploads++;
+      this.consecutiveFastUploads = 0;
+      if (
+        this.consecutiveSlowUploads >= SLOW_UPLINK_WINDOW &&
+        !this.slowBadgeVisible
+      ) {
+        this.slowBadgeVisible = true;
+        notify(this.win, PUSH_CHANNELS.ASR_UPLOAD_SLOW, { visible: true });
+        logger.warn({
+          event: 'slow_uplink_detected',
+          bytesPerSec: Math.round(bytesPerSec),
+          fileSizeBytes,
+          durationMs,
+        });
+      }
+    } else {
+      this.consecutiveFastUploads++;
+      this.consecutiveSlowUploads = 0;
+      if (
+        this.consecutiveFastUploads >= SLOW_UPLINK_CLEAR_WINDOW &&
+        this.slowBadgeVisible
+      ) {
+        this.slowBadgeVisible = false;
+        this.consecutiveFastUploads = 0;
+        notify(this.win, PUSH_CHANNELS.ASR_UPLOAD_SLOW, { visible: false });
+      }
     }
   }
 }

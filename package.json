@@ -13,10 +13,13 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:transcript": "bun scripts/test-transcript.ts",
     "postinstall": "electron-rebuild -f -w better-sqlite3,naudiodon2 || true"
   },
   "dependencies": {
     "@electron/rebuild": "^4.0.4",
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.8.0",
     "@tailwindcss/vite": "^4.1.11",
     "@tanstack/react-virtual": "^3.13.24",
     "better-sqlite3": "^12.9.0",
