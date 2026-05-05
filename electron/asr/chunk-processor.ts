@@ -148,7 +148,7 @@ export class ChunkProcessor {
 
         const transcriptId = await provider.submitTranscript(
           uploadUrl,
-          { speakerLabels: true, languageCode: 'en_us' },
+          { speakerLabels: true, languageCode: 'multi' },
           signal,
         );
         this.chunkRepo.setTranscriptId(chunk.id, transcriptId);
@@ -221,6 +221,10 @@ export class ChunkProcessor {
       text: u.text,
       confidence: u.confidence ?? null,
     }));
+
+    if (rawUtterances.length === 0) {
+      logger.warn({ event: 'chunk_transcribed_empty', chunkId: chunk.id, sessionId: chunk.sessionId, stream: chunk.stream });
+    }
 
     if (rawUtterances.length > 0) {
       const stream: Stream = chunk.stream;

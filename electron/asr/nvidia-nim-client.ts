@@ -26,9 +26,9 @@ import { ProviderError, type ProviderErrorCode } from './provider-errors.js';
 
 const execFileAsync = promisify(execFile);
 
-// Function ID for nvidia/parakeet-tdt-0.6b-v2 on NVCF
+// Function ID for openai/whisper-large-v3 on NVCF (supports 99 languages + auto-detect via "multi")
 const NVIDIA_HOST    = 'grpc.nvcf.nvidia.com:443';
-const FUNCTION_ID    = 'd3fe9151-442b-4204-a70d-5fcc597fd610';
+const FUNCTION_ID    = 'b702f636-f60c-4a3d-a6f4-f3568c13bd7d';
 const MAX_CHUNK_BYTES = 50 * 1024 * 1024; // 50 MB PCM safety limit
 
 // Job state — keyed by transcript ID
@@ -273,8 +273,8 @@ export class NvidiaNimClient implements IASRProvider {
     const config = {
       encoding:                   1, // LINEAR_PCM
       sample_rate_hertz:          sampleRate,
-      // NVIDIA expects en-US format; AssemblyAI uses en_us
-      language_code:              (options.languageCode ?? 'en_us').replace('_', '-'),
+      // 'multi' enables Whisper auto language detection across 99 languages
+      language_code:              (options.languageCode ?? 'multi').replace('_', '-'),
       max_alternatives:           1, // CRITICAL: proto3 default 0 = empty transcript
       enable_automatic_punctuation: true,
       enable_word_time_offsets:   true,

@@ -91,7 +91,8 @@ export class SessionFinalizer {
   }
 
   private applyAudioRetention(sessionId: string, status: SessionStatus): void {
-    const keepRawAudio = this.settingsRepo.get<boolean>('keep_raw_audio', false);
+    void this.settingsRepo; // settingsRepo reserved for when debug override is removed
+    const keepRawAudio = true; // DEBUG: force-retain audio until empty-transcript bug is diagnosed
 
     if (status === 'failed') {
       // Force retain on failure — user may want to retry
