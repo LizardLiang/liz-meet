@@ -69,15 +69,19 @@ export class LoopbackRecorder {
           rmsDb: e.rmsDb,
         });
       } else if (e.type === 'chunk') {
-        this.chunkRepo.create({
-          sessionId,
-          stream: 'system',
-          seq: e.seq,
-          filePath: e.path,
-          startSeconds: e.startSeconds,
-          endSeconds: e.endSeconds,
-        });
-        logger.info({ event: 'loopback_chunk_written', seq: e.seq });
+        try {
+          this.chunkRepo.create({
+            sessionId,
+            stream: 'system',
+            seq: e.seq,
+            filePath: e.path,
+            startSeconds: e.startSeconds,
+            endSeconds: e.endSeconds,
+          });
+          logger.info({ event: 'loopback_chunk_written', seq: e.seq, path: e.path });
+        } catch (err) {
+          logger.error({ event: 'loopback_chunk_insert_failed', seq: e.seq, path: e.path, err: String(err) });
+        }
       } else {
         logger.error({ event: 'loopback_native_error', message: e.message });
       }
