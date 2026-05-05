@@ -29,9 +29,9 @@ function isSqliteError(err: unknown): boolean {
 function isCaptureError(err: unknown): boolean {
   return (
     err instanceof Error &&
-    (err.message.includes('naudiodon') ||
-      err.message.includes('loopback') ||
-      err.message.includes('capture'))
+    (err.message.includes('loopback') ||
+      err.message.includes('capture') ||
+      err.message.includes('WASAPI'))
   );
 }
 

@@ -9,12 +9,12 @@ import { logger } from '../logging/logger.js';
 export async function runPreflight(): Promise<PreflightResult> {
   let micAvailable = false;
   let apiKeyExists = false;
-  const loopbackReady = true; // electron-audio-loopback init is renderer-side
+  const loopbackReady = true;
 
-  // Check mic
+  // Check mic — WASAPI capture endpoint enumeration
   try {
-    const devices = MicRecorder.getDevices();
-    micAvailable = devices.some(d => d.maxInputChannels > 0);
+    const devices = MicRecorder.listDevices();
+    micAvailable = devices.length > 0;
   } catch {
     micAvailable = false;
   }
@@ -29,7 +29,7 @@ export async function runPreflight(): Promise<PreflightResult> {
   const result: PreflightResult = {
     ok: micAvailable && apiKeyExists,
     micAvailable,
-    systemAudioSilent: false,  // soft check; renderer handles this
+    systemAudioSilent: false,
     apiKeyExists,
     loopbackReady,
   };

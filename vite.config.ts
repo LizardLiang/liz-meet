@@ -17,7 +17,7 @@ export default defineConfig({
             rollupOptions: {
               // Externalize all node_modules for the main process — they are available
               // at runtime in Electron's Node.js environment and do not need bundling.
-              // Bundling packages like better-sqlite3, naudiodon2, or @grpc/grpc-js
+              // Bundling packages like better-sqlite3, @liz-meet/loopback-capture, or @grpc/grpc-js
               // inlines their CJS helpers (bindings, require, __filename) into ESM
               // output where they are not defined, causing runtime failures.
               external(id) {

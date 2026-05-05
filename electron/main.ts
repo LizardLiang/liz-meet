@@ -35,9 +35,9 @@ async function bootstrap() {
   const { detectOrphanedSessions } = await import('./capture/recovery.js')
   const { AssemblyAIClient } = await import('./asr/assemblyai-client.js')
   const { NvidiaNimClient } = await import('./asr/nvidia-nim-client.js')
-  const { DeepgramClient } = await import('./asr/deepgram-client.js')
   const { getProtoPath } = await import('./asr/proto-path.js')
-  const { ChunkProcessor } = await import('./asr/chunk-processor.js')
+  const { DeepgramClient } = await import('./asr/deepgram-client.js')
+const { ChunkProcessor } = await import('./asr/chunk-processor.js')
   const { TranscriptAssembler } = await import('./asr/transcript-assembler.js')
   const { SessionFinalizer } = await import('./asr/session-finalizer.js')
   const { apiKeyService } = await import('./services/api-key-service.js')
@@ -122,6 +122,19 @@ function createWindow() {
       sandbox: true,  // defense-in-depth §4.2.4 R-SEC-2
     },
   })
+
+  // Allow getUserMedia(audio) so Bluetooth mics trigger Windows HFP profile switch.
+  // Deny everything else (camera, geolocation, notifications, …).
+  win.webContents.session.setPermissionRequestHandler((_wc, permission, callback, details) => {
+    if (permission === 'media') {
+      const req = details as { mediaTypes?: string[] };
+      const audioOnly = Array.isArray(req.mediaTypes)
+        && req.mediaTypes.includes('audio')
+        && !req.mediaTypes.includes('video');
+      return callback(audioOnly);
+    }
+    callback(false);
+  });
 
   update(win)
 

@@ -1,31 +1,44 @@
 // electron/capture/mic-recorder.ts
-// Mic capture using naudiodon2 (main-process native, locked decision L1).
+// Mic capture using the @liz-meet/loopback-capture WASAPI addon (eCapture endpoint).
 
-import type { BrowserWindow } from 'electron';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { app, BrowserWindow } from 'electron';
 import type { ChunkRepository } from '../db/chunk-repository.js';
-import { ChunkAccumulator } from './chunk-accumulator.js';
 import { notify } from '../ipc/notifier.js';
 import { PUSH_CHANNELS } from '../ipc/channels.js';
 import { logger } from '../logging/logger.js';
 
-type NaudiodonDevice = { id: number; name: string; maxInputChannels: number };
-interface NaudiodonAudioStream extends NodeJS.EventEmitter {
-  start(): void;
-  quit(): void;
+type MicEvent =
+  | { type: 'vu';    rmsDb: number }
+  | { type: 'chunk'; path: string; seq: number; startSeconds: number; endSeconds: number }
+  | { type: 'error'; message: string };
+
+interface NativeAddon {
+  listInputDevices(): Array<{ id: string; name: string; isDefault: boolean }>;
+  startMic(
+    opts: { sessionDir?: string; deviceId?: string; chunkSeconds?: number; vuIntervalMs?: number },
+    cb: (e: MicEvent) => void,
+  ): void;
+  stopMic(): void;
+  isMicRunning(): boolean;
+  // loopback API is also on this object; not typed here
 }
-interface NaudiodonModule {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  AudioIO: new (opts: any) => NaudiodonAudioStream;
-  SampleFormat16Bit: number;
-  getDevices(): NaudiodonDevice[];
+
+let _native: NativeAddon | null = null;
+function getNative(): NativeAddon | null {
+  if (process.platform !== 'win32') return null;
+  if (!_native) {
+    try {
+      _native = createRequire(import.meta.url)('@liz-meet/loopback-capture') as NativeAddon;
+    } catch (err) {
+      logger.error({ event: 'mic_addon_load_failed', err: String(err) });
+    }
+  }
+  return _native;
 }
-// naudiodon2 is a native addon — use createRequire for ESM/CJS compatibility
-import { createRequire } from 'node:module';
-const naudiodon = createRequire(import.meta.url)('naudiodon2') as NaudiodonModule;
 
 export class MicRecorder {
-  private audioIn: NaudiodonAudioStream | null = null;
-  private accumulator: ChunkAccumulator | null = null;
   private active = false;
 
   constructor(
@@ -33,65 +46,69 @@ export class MicRecorder {
     private chunkRepo: ChunkRepository,
   ) {}
 
-  start(
-    sessionId: string,
-    deviceId: number,
-    chunkDurationSeconds: number,
-  ): void {
+  start(sessionId: string, deviceId: string | null, chunkDurationSeconds: number): void {
     if (this.active) return;
+    const native = getNative();
+    if (!native) {
+      logger.warn({ event: 'mic_unsupported_platform' });
+      return;
+    }
 
-    this.accumulator = new ChunkAccumulator(
+    const sessionDir = path.join(
+      app.getPath('userData'),
+      'recordings',
       sessionId,
       'mic',
-      chunkDurationSeconds,
-      this.chunkRepo,
-      this.win,
     );
 
-    try {
-      this.audioIn = new naudiodon.AudioIO({
-        inOptions: {
-          deviceId: deviceId ?? -1,
-          sampleRate: 16_000,
-          channelCount: 1,
-          sampleFormat: naudiodon.SampleFormat16Bit,
-          framesPerBuffer: 1_600, // 100 ms frames
-          closeOnError: false,
-        },
-      });
+    native.startMic(
+      {
+        sessionDir,
+        deviceId: deviceId ?? undefined,
+        chunkSeconds: chunkDurationSeconds,
+        vuIntervalMs: 50,
+      },
+      (e) => {
+        if (e.type === 'vu') {
+          notify(this.win, PUSH_CHANNELS.CAPTURE_VU_UPDATE, {
+            stream: 'mic',
+            rmsDb: e.rmsDb,
+          });
+        } else if (e.type === 'chunk') {
+          try {
+            this.chunkRepo.create({
+              sessionId,
+              stream: 'mic',
+              seq: e.seq,
+              filePath: e.path,
+              startSeconds: e.startSeconds,
+              endSeconds: e.endSeconds,
+            });
+            logger.info({ event: 'mic_chunk_written', seq: e.seq, path: e.path });
+          } catch (err) {
+            logger.error({ event: 'mic_chunk_insert_failed', seq: e.seq, err: String(err) });
+          }
+        } else {
+          logger.error({ event: 'mic_native_error', message: e.message });
+          notify(this.win, PUSH_CHANNELS.CAPTURE_DEVICE_EVENT, {
+            stream: 'mic',
+            event: 'removed',
+          });
+        }
+      },
+    );
 
-      this.audioIn.on('data', (buffer: Buffer) => {
-        this.accumulator?.push(buffer);
-      });
-
-      this.audioIn.on('error', (err: Error) => {
-        logger.error({ event: 'mic_error', code: 'capture_failed' });
-        notify(this.win, PUSH_CHANNELS.CAPTURE_DEVICE_EVENT, {
-          stream: 'mic',
-          event: 'removed',
-          errorCode: 0,
-        });
-        void err;
-      });
-
-      this.audioIn.start();
-      this.active = true;
-      logger.info({ event: 'mic_started', sessionId });
-    } catch (err) {
-      logger.error({ event: 'mic_start_failed', code: 'capture_failed' });
-      throw err;
-    }
+    this.active = true;
+    logger.info({ event: 'mic_started', sessionId });
   }
 
   pause(): void {
-    this.accumulator?.flush();
+    // WASAPI capture is continuous; the session-level flush is not needed here
   }
 
   stop(): void {
     if (!this.active) return;
-    this.accumulator?.flush();
-    this.audioIn?.quit();
-    this.audioIn = null;
+    getNative()?.stopMic();
     this.active = false;
     logger.info({ event: 'mic_stopped' });
   }
@@ -100,15 +117,40 @@ export class MicRecorder {
     return this.active;
   }
 
-  getAccumulator(): ChunkAccumulator | null {
-    return this.accumulator;
-  }
-
-  static getDevices(): Array<{ id: number; name: string; maxInputChannels: number }> {
+  static listDevices(): Array<{ id: string; name: string; isDefault: boolean }> {
     try {
-      return naudiodon.getDevices();
+      const native = createRequire(import.meta.url)('@liz-meet/loopback-capture') as NativeAddon;
+      return native.listInputDevices();
     } catch {
       return [];
     }
   }
+}
+
+// ---- Preview mode (pre-flight VU only, no WAV chunks) ----
+
+let previewActive = false;
+let previewDeviceId: string | null = null;
+
+export function startMicPreview(win: BrowserWindow, deviceId: string | null): void {
+  if (previewActive) {
+    if (deviceId === previewDeviceId) return;
+    stopMicPreview(); // restart on different device
+  }
+  const native = getNative();
+  if (!native) return;
+  native.startMic({ deviceId: deviceId ?? undefined, vuIntervalMs: 50 }, (e) => {
+    if (e.type === 'vu') {
+      notify(win, PUSH_CHANNELS.CAPTURE_VU_UPDATE, { stream: 'mic', rmsDb: e.rmsDb });
+    }
+  });
+  previewActive = true;
+  previewDeviceId = deviceId;
+}
+
+export function stopMicPreview(): void {
+  if (!previewActive) return;
+  getNative()?.stopMic();
+  previewActive = false;
+  previewDeviceId = null;
 }

@@ -73,7 +73,7 @@ export interface SpeakerLabelOverride {
 
 export interface Settings {
   chunkSeconds: number;         // 5–15
-  micDeviceId: number | null;   // -1 = default
+  micDeviceId: string | null;   // null = WASAPI default eCommunications device
   provider: 'assemblyai' | 'deepgram' | 'nvidia';
   keepRawAudio: boolean;
   telemetryOptIn: boolean;

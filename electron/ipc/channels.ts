@@ -29,6 +29,9 @@ export const CHANNELS = {
   CAPTURE_PREFLIGHT:           'capture:preflight',
   CAPTURE_LOOPBACK_PREVIEW_START: 'capture:loopback-preview-start',
   CAPTURE_LOOPBACK_PREVIEW_STOP:  'capture:loopback-preview-stop',
+  CAPTURE_LIST_MIC_DEVICES:       'capture:list-mic-devices',
+  CAPTURE_MIC_PREVIEW_START:      'capture:mic-preview-start',
+  CAPTURE_MIC_PREVIEW_STOP:       'capture:mic-preview-stop',
   // Segments
   SEGMENT_FIND_BY_SESSION: 'segment:findBySession',
   SEGMENT_SEARCH:          'segment:search',
@@ -148,6 +151,9 @@ export type ChannelReqMap = {
   [CHANNELS.CAPTURE_PREFLIGHT]: undefined;
   [CHANNELS.CAPTURE_LOOPBACK_PREVIEW_START]: undefined;
   [CHANNELS.CAPTURE_LOOPBACK_PREVIEW_STOP]:  undefined;
+  [CHANNELS.CAPTURE_LIST_MIC_DEVICES]:       undefined;
+  [CHANNELS.CAPTURE_MIC_PREVIEW_START]:      { deviceId: string | null };
+  [CHANNELS.CAPTURE_MIC_PREVIEW_STOP]:       undefined;
   [CHANNELS.SEGMENT_FIND_BY_SESSION]: { sessionId: string };
   [CHANNELS.SEGMENT_SEARCH]: SegmentSearchArgs;
   [CHANNELS.SPEAKER_LABEL_UPSERT]: SpeakerLabelUpsertArgs;
@@ -178,6 +184,9 @@ export type ChannelResMap = {
   [CHANNELS.CAPTURE_PREFLIGHT]: PreflightResult;
   [CHANNELS.CAPTURE_LOOPBACK_PREVIEW_START]: { ok: boolean };
   [CHANNELS.CAPTURE_LOOPBACK_PREVIEW_STOP]:  { ok: boolean };
+  [CHANNELS.CAPTURE_LIST_MIC_DEVICES]:       Array<{ id: string; name: string; isDefault: boolean }>;
+  [CHANNELS.CAPTURE_MIC_PREVIEW_START]:      { ok: boolean };
+  [CHANNELS.CAPTURE_MIC_PREVIEW_STOP]:       { ok: boolean };
   [CHANNELS.SEGMENT_FIND_BY_SESSION]: Segment[];
   [CHANNELS.SEGMENT_SEARCH]: SearchResult[];
   [CHANNELS.SPEAKER_LABEL_UPSERT]: { ok: boolean };

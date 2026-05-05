@@ -62,8 +62,9 @@ export class SessionStateMachine {
     });
 
     this.currentSessionId = session.id;
-    const chunkSeconds = this.settingsRepo.get<number>('chunk_seconds', 10);
-    const micDeviceId  = this.settingsRepo.get<number | null>('mic_device_id', null) ?? -1;
+    const chunkSeconds = this.settingsRepo.get<number>('chunk_seconds', 5);
+    const rawDeviceId  = this.settingsRepo.get<unknown>('mic_device_id', null);
+    const micDeviceId  = typeof rawDeviceId === 'string' ? rawDeviceId : null;
 
     if (args.source === 'mic' || args.source === 'both') {
       this.micRecorder.start(session.id, micDeviceId, chunkSeconds);
@@ -114,8 +115,9 @@ export class SessionStateMachine {
       this.autoStopTimer = null;
     }
 
-    const chunkSeconds = this.settingsRepo.get<number>('chunk_seconds', 10);
-    const micDeviceId  = this.settingsRepo.get<number | null>('mic_device_id', null) ?? -1;
+    const chunkSeconds = this.settingsRepo.get<number>('chunk_seconds', 5);
+    const rawDeviceId2 = this.settingsRepo.get<unknown>('mic_device_id', null);
+    const micDeviceId  = typeof rawDeviceId2 === 'string' ? rawDeviceId2 : null;
     const session = this.sessionRepo.findById(this.currentSessionId!);
     if (!session) return;
 

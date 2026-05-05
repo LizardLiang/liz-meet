@@ -15,6 +15,7 @@ import type { apiKeyService as ApiKeyServiceType } from '../services/api-key-ser
 import type { PrivacyService } from '../services/privacy-service.js';
 import { runPreflight } from '../capture/preflight.js';
 import { startLoopbackPreview, stopLoopbackPreview } from '../capture/loopback-recorder.js';
+import { startMicPreview, stopMicPreview, MicRecorder } from '../capture/mic-recorder.js';
 import { NOTICE_VERSION_HASH, NOTICE_TEXT } from '../../src/constants/privacy-notice.js';
 import { rmSync, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -52,8 +53,8 @@ const SETTINGS_ALLOWLIST: Record<string, SettingsValidator> = {
     return null;
   },
   mic_device_id: (v) => {
-    if (v !== null && (typeof v !== 'number' || !Number.isInteger(v))) {
-      return 'mic_device_id must be an integer or null';
+    if (v !== null && typeof v !== 'string') {
+      return 'mic_device_id must be a WASAPI endpoint id string or null';
     }
     return null;
   },
@@ -183,6 +184,7 @@ export function registerHandlers(deps: HandlerDeps): void {
     withErrorWrapper(CHANNELS.CAPTURE_START, async (_event, args: { title: string; source: 'mic' | 'system' | 'both' }) => {
       logger.info({ event: 'capture_start_step', step: 'preview_stop_begin' });
       stopLoopbackPreview();
+      stopMicPreview();
       logger.info({ event: 'capture_start_step', step: 'preview_stop_done' });
       const result = await stateMachine.start(args);
       logger.info({ event: 'capture_start_step', step: 'session_started' });
@@ -233,6 +235,27 @@ export function registerHandlers(deps: HandlerDeps): void {
     CHANNELS.CAPTURE_LOOPBACK_PREVIEW_STOP,
     withErrorWrapper(CHANNELS.CAPTURE_LOOPBACK_PREVIEW_STOP, () => {
       stopLoopbackPreview();
+      return { ok: true };
+    }),
+  );
+
+  ipcMain.handle(
+    CHANNELS.CAPTURE_LIST_MIC_DEVICES,
+    withErrorWrapper(CHANNELS.CAPTURE_LIST_MIC_DEVICES, () => MicRecorder.listDevices()),
+  );
+
+  ipcMain.handle(
+    CHANNELS.CAPTURE_MIC_PREVIEW_START,
+    withErrorWrapper(CHANNELS.CAPTURE_MIC_PREVIEW_START, (_event, args: { deviceId: string | null }) => {
+      startMicPreview(deps.win, args?.deviceId ?? null);
+      return { ok: true };
+    }),
+  );
+
+  ipcMain.handle(
+    CHANNELS.CAPTURE_MIC_PREVIEW_STOP,
+    withErrorWrapper(CHANNELS.CAPTURE_MIC_PREVIEW_STOP, () => {
+      stopMicPreview();
       return { ok: true };
     }),
   );

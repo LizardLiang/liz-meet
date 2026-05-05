@@ -1,7 +1,6 @@
 // electron/capture/device-monitor.ts
 // Monitors for audio device hot-swap events.
-// naudiodon2 emits errors on device removal (handled in mic-recorder.ts).
-// This module provides the Windows Audio service restart retry logic.
+// Polls listDevices() to detect when a removed mic comes back online.
 
 import { logger } from '../logging/logger.js';
 import { MicRecorder } from './mic-recorder.js';
@@ -16,7 +15,7 @@ export class DeviceMonitor {
 
   /**
    * Begin polling for device restoration.
-   * Calls onRestored() when the device comes back online.
+   * Calls onRestored() when a capture device comes back online.
    * Stops after 30 seconds if not restored.
    */
   startRetry(onRestored: () => void, onFailed?: () => void): void {
@@ -34,9 +33,8 @@ export class DeviceMonitor {
       }
 
       try {
-        const devices = MicRecorder.getDevices();
-        const hasMic = devices.some(d => d.maxInputChannels > 0);
-        if (hasMic) {
+        const devices = MicRecorder.listDevices();
+        if (devices.length > 0) {
           this.stopRetry();
           logger.info({ event: 'device_restored' });
           this.onRestored?.();

@@ -1,11 +1,29 @@
 // src/components/PreflightPanel.tsx
 // Pre-flight panel: mic/system toggles, VU meters, Start button.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VuMeter from './VuMeter.js';
 import { invokeIpc, onPush } from '../lib/ipc.js';
 import type { AudioSource } from '../types/liz-transcribe.js';
+
+interface MicDevice {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
+
+// Requests getUserMedia to trigger Windows HFP profile switch for Bluetooth mics,
+// then immediately releases the stream. Returns true if permission was granted.
+async function triggerBluetoothHfp(): Promise<boolean> {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    stream.getTracks().forEach(t => t.stop());
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export default function PreflightPanel() {
   const navigate = useNavigate();
@@ -17,10 +35,43 @@ export default function PreflightPanel() {
   const [title, setTitle] = useState('');
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [micDevices, setMicDevices] = useState<MicDevice[]>([]);
+  const [selectedMicId, setSelectedMicId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     invokeIpc<boolean>('apikey:exists').then(exists => setApiKeyExists(exists)).catch(() => void 0);
   }, []);
+
+  const loadMicDevices = useCallback(async (triggerHfp = false) => {
+    if (triggerHfp) await triggerBluetoothHfp();
+    try {
+      const devices = await invokeIpc<MicDevice[]>('capture:list-mic-devices');
+      setMicDevices(devices);
+      setSelectedMicId(prev => {
+        // Keep existing selection if still present, otherwise pick default
+        if (prev && devices.some(d => d.id === prev)) return prev;
+        const def = devices.find(d => d.isDefault) ?? devices[0];
+        return def?.id ?? null;
+      });
+    } catch {
+      // leave existing list
+    }
+  }, []);
+
+  // Load mic device list on mount (triggering HFP to pick up Bluetooth mics)
+  useEffect(() => {
+    void loadMicDevices(true);
+  }, [loadMicDevices]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    // Stop current preview so WASAPI endpoint isn't held open during re-enum
+    await window.ipcRenderer.invoke('capture:mic-preview-stop');
+    await loadMicDevices(true);
+    setRefreshing(false);
+    // Preview will restart via the selectedMicId effect
+  };
 
   useEffect(() => {
     const unsubMic = onPush<{ stream: string; rmsDb: number }>('capture:vu-update', ({ stream, rmsDb }) => {
@@ -31,7 +82,7 @@ export default function PreflightPanel() {
     return unsubMic;
   }, []);
 
-  // Native WASAPI loopback preview — VU updates arrive via capture:vu-update push
+  // Native WASAPI loopback preview
   useEffect(() => {
     if (!systemEnabled) { setSystemVu(-100); return; }
     void window.ipcRenderer.invoke('capture:loopback-preview-start');
@@ -40,6 +91,26 @@ export default function PreflightPanel() {
       setSystemVu(-100);
     };
   }, [systemEnabled]);
+
+  // Native WASAPI mic preview — restarts when device selection or toggle changes
+  useEffect(() => {
+    if (!micEnabled) {
+      setMicVu(-100);
+      void window.ipcRenderer.invoke('capture:mic-preview-stop');
+      return;
+    }
+    void window.ipcRenderer.invoke('capture:mic-preview-start', { deviceId: selectedMicId });
+    return () => {
+      void window.ipcRenderer.invoke('capture:mic-preview-stop');
+      setMicVu(-100);
+    };
+  }, [micEnabled, selectedMicId]);
+
+  // Persist mic device selection to settings
+  const handleMicDeviceChange = (id: string) => {
+    setSelectedMicId(id);
+    invokeIpc('settings:set', { key: 'mic_device_id', value: id }).catch(() => void 0);
+  };
 
   const source: AudioSource =
     micEnabled && systemEnabled ? 'both' :
@@ -91,7 +162,36 @@ export default function PreflightPanel() {
             />
             <span className="label-text">Microphone</span>
           </label>
-          {micEnabled && <VuMeter rmsDb={micVu} stream="mic" />}
+          {micEnabled && (
+            <>
+              <div className="flex gap-2 items-center">
+                {micDevices.length > 1 ? (
+                  <select
+                    className="select select-bordered select-sm flex-1"
+                    value={selectedMicId ?? ''}
+                    onChange={e => handleMicDeviceChange(e.target.value)}
+                  >
+                    {micDevices.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                ) : micDevices.length === 1 ? (
+                  <span className="text-sm flex-1 truncate">{micDevices[0].name}</span>
+                ) : (
+                  <span className="text-sm text-warning flex-1">No microphone detected</span>
+                )}
+                <button
+                  className={`btn btn-ghost btn-xs${refreshing ? ' loading' : ''}`}
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  title="Re-scan for microphones (triggers Bluetooth HFP handoff)"
+                >
+                  {refreshing ? '' : '↺'}
+                </button>
+              </div>
+              <VuMeter rmsDb={micVu} stream="mic" />
+            </>
+          )}
 
           <label className="label cursor-pointer justify-start gap-3">
             <input

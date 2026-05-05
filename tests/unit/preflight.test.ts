@@ -13,7 +13,7 @@ vi.mock('../../electron/logging/logger.js', () => ({
 
 vi.mock('../../electron/capture/mic-recorder.js', () => ({
   MicRecorder: {
-    getDevices: vi.fn(),
+    listDevices: vi.fn(),
   },
 }));
 
@@ -31,9 +31,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+const fakeMic = { id: '{dev-guid}', name: 'Microphone', isDefault: true };
+
 describe('runPreflight', () => {
   it('UNIT-031: no mic device detected → micAvailable=false', async () => {
-    vi.mocked(MicRecorder.getDevices).mockReturnValue([]);
+    vi.mocked(MicRecorder.listDevices).mockReturnValue([]);
     vi.mocked(apiKeyService.exists).mockReturnValue(true);
 
     const result = await runPreflight();
@@ -42,21 +44,8 @@ describe('runPreflight', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('UNIT-031: device with no input channels → micAvailable=false', async () => {
-    vi.mocked(MicRecorder.getDevices).mockReturnValue([
-      { name: 'Speakers', maxInputChannels: 0, maxOutputChannels: 2 } as never,
-    ]);
-    vi.mocked(apiKeyService.exists).mockReturnValue(true);
-
-    const result = await runPreflight();
-
-    expect(result.micAvailable).toBe(false);
-  });
-
-  it('UNIT-031: device with input channels → micAvailable=true', async () => {
-    vi.mocked(MicRecorder.getDevices).mockReturnValue([
-      { name: 'Microphone', maxInputChannels: 1, maxOutputChannels: 0 } as never,
-    ]);
+  it('UNIT-031: at least one capture device → micAvailable=true', async () => {
+    vi.mocked(MicRecorder.listDevices).mockReturnValue([fakeMic]);
     vi.mocked(apiKeyService.exists).mockReturnValue(true);
 
     const result = await runPreflight();
@@ -65,9 +54,7 @@ describe('runPreflight', () => {
   });
 
   it('UNIT-032: systemAudioSilent defaults to false (renderer-side check)', async () => {
-    vi.mocked(MicRecorder.getDevices).mockReturnValue([
-      { name: 'Microphone', maxInputChannels: 1, maxOutputChannels: 0 } as never,
-    ]);
+    vi.mocked(MicRecorder.listDevices).mockReturnValue([fakeMic]);
     vi.mocked(apiKeyService.exists).mockReturnValue(true);
 
     const result = await runPreflight();
@@ -76,8 +63,8 @@ describe('runPreflight', () => {
   });
 
   it('mic detection throws → micAvailable=false (graceful)', async () => {
-    vi.mocked(MicRecorder.getDevices).mockImplementation(() => {
-      throw new Error('naudiodon not available');
+    vi.mocked(MicRecorder.listDevices).mockImplementation(() => {
+      throw new Error('WASAPI not available');
     });
     vi.mocked(apiKeyService.exists).mockReturnValue(true);
 
@@ -87,9 +74,7 @@ describe('runPreflight', () => {
   });
 
   it('all ok when mic available and api key exists', async () => {
-    vi.mocked(MicRecorder.getDevices).mockReturnValue([
-      { name: 'Microphone', maxInputChannels: 1, maxOutputChannels: 0 } as never,
-    ]);
+    vi.mocked(MicRecorder.listDevices).mockReturnValue([fakeMic]);
     vi.mocked(apiKeyService.exists).mockReturnValue(true);
 
     const result = await runPreflight();
@@ -101,9 +86,7 @@ describe('runPreflight', () => {
   });
 
   it('apiKeyExists=false → ok=false', async () => {
-    vi.mocked(MicRecorder.getDevices).mockReturnValue([
-      { name: 'Microphone', maxInputChannels: 1, maxOutputChannels: 0 } as never,
-    ]);
+    vi.mocked(MicRecorder.listDevices).mockReturnValue([fakeMic]);
     vi.mocked(apiKeyService.exists).mockReturnValue(false);
 
     const result = await runPreflight();
