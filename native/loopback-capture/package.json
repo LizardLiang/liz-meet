@@ -1,0 +1,13 @@
+{
+  "name": "@liz-meet/loopback-capture",
+  "version": "1.0.0",
+  "description": "WASAPI loopback audio capture native addon for Electron",
+  "main": "index.js",
+  "scripts": {
+    "build": "node-gyp build",
+    "rebuild": "node-gyp rebuild"
+  },
+  "dependencies": {
+    "node-addon-api": "^8.7.0"
+  }
+}

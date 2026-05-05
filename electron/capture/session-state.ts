@@ -34,7 +34,7 @@ export class SessionStateMachine {
   ) {
     void this._chunkRepo; // used by mic/loopback recorders
     this.micRecorder = new MicRecorder(win, _chunkRepo);
-    this.loopbackRecorder = new LoopbackRecorder(_chunkRepo);
+    this.loopbackRecorder = new LoopbackRecorder(_chunkRepo, win);
   }
 
   getState(): CaptureState {
@@ -70,7 +70,7 @@ export class SessionStateMachine {
     }
 
     if (args.source === 'system' || args.source === 'both') {
-      this.loopbackRecorder.start();
+      this.loopbackRecorder.start(session.id, chunkSeconds);
     }
 
     this.state = 'recording';
@@ -155,8 +155,9 @@ export class SessionStateMachine {
       });
     }
 
-    this.state = 'processing';
     logger.info({ event: 'session_stopped', sessionId: this.currentSessionId, durationSeconds });
+    this.state = 'idle';
+    this.currentSessionId = null;
   }
 
   private autoStop(reason: 'sleep' | 'pause-timeout'): void {

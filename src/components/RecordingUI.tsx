@@ -5,11 +5,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VuMeter from './VuMeter.js';
 import { invokeIpc, onPush } from '../lib/ipc.js';
-import type { SessionStatus } from '../types/liz-transcribe.js';
+import type { SessionStatus, AudioSource } from '../types/liz-transcribe.js';
 
 interface Props {
   sessionId: string;
   initialStatus: SessionStatus;
+  source?: AudioSource | null;
 }
 
 function formatElapsed(seconds: number): string {
@@ -19,16 +20,18 @@ function formatElapsed(seconds: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export default function RecordingUI({ sessionId, initialStatus }: Props) {
+export default function RecordingUI({ sessionId, initialStatus, source }: Props) {
   const navigate = useNavigate();
   const [status, setStatus] = useState<SessionStatus>(initialStatus);
   const [elapsed, setElapsed] = useState(0);
-  const [micVu, setMicVu] = useState(-100);
+  const [micVu, setMicVu]       = useState(-100);
   const [systemVu, setSystemVu] = useState(-100);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isRecording = status === 'recording';
-  const isPaused    = status === 'paused';
+  const isRecording  = status === 'recording';
+  const isPaused     = status === 'paused';
+  const micActive    = source === 'mic' || source === 'both' || source == null;
+  const systemActive = source === 'system' || source === 'both';
 
   useEffect(() => {
     if (isRecording) {
@@ -48,10 +51,9 @@ export default function RecordingUI({ sessionId, initialStatus }: Props) {
 
   useEffect(() => {
     const unsub = onPush<{ stream: string; rmsDb: number }>('capture:vu-update', ({ stream, rmsDb }) => {
-      if (stream === 'mic') setMicVu(rmsDb);
-    });
-    const unsubSys = onPush<{ rmsDb: number }>('capture:vu-update-system', ({ rmsDb }) => {
-      setSystemVu(rmsDb);
+      const safe = Number.isFinite(rmsDb) ? rmsDb : -100;
+      if (stream === 'mic')    setMicVu(safe);
+      if (stream === 'system') setSystemVu(safe);
     });
     const unsubStatus = onPush<{ sessionId: string; newStatus: SessionStatus }>(
       'session:status-changed',
@@ -59,7 +61,7 @@ export default function RecordingUI({ sessionId, initialStatus }: Props) {
         if (sid === sessionId) setStatus(newStatus);
       },
     );
-    return () => { unsub(); unsubSys(); unsubStatus(); };
+    return () => { unsub(); unsubStatus(); };
   }, [sessionId]);
 
   const handlePause = async () => {
@@ -100,8 +102,8 @@ export default function RecordingUI({ sessionId, initialStatus }: Props) {
 
         {/* VU meters */}
         <div className="flex flex-col gap-2">
-          <VuMeter rmsDb={micVu} stream="mic" />
-          <VuMeter rmsDb={systemVu} stream="system" />
+          {micActive    && <VuMeter rmsDb={micVu} stream="mic" />}
+          {systemActive && <VuMeter rmsDb={systemVu} stream="system" />}
         </div>
 
         {/* Controls */}

@@ -24,11 +24,22 @@ export default function PreflightPanel() {
 
   useEffect(() => {
     const unsubMic = onPush<{ stream: string; rmsDb: number }>('capture:vu-update', ({ stream, rmsDb }) => {
-      if (stream === 'mic') setMicVu(rmsDb);
-      if (stream === 'system') setSystemVu(rmsDb);
+      const safe = Number.isFinite(rmsDb) ? rmsDb : -100;
+      if (stream === 'mic') setMicVu(safe);
+      if (stream === 'system') setSystemVu(safe);
     });
     return unsubMic;
   }, []);
+
+  // Native WASAPI loopback preview — VU updates arrive via capture:vu-update push
+  useEffect(() => {
+    if (!systemEnabled) { setSystemVu(-100); return; }
+    void window.ipcRenderer.invoke('capture:loopback-preview-start');
+    return () => {
+      void window.ipcRenderer.invoke('capture:loopback-preview-stop');
+      setSystemVu(-100);
+    };
+  }, [systemEnabled]);
 
   const source: AudioSource =
     micEnabled && systemEnabled ? 'both' :
@@ -46,7 +57,7 @@ export default function PreflightPanel() {
         title: title.trim() || `Session ${new Date().toLocaleString()}`,
         source,
       });
-      navigate(`/recording?session=${result.sessionId}&recording=1`);
+      navigate(`/recording?session=${result.sessionId}&recording=1&source=${encodeURIComponent(source)}`);
     } catch (err) {
       setStarting(false);
       setStartError(err instanceof Error ? err.message : 'Failed to start recording');

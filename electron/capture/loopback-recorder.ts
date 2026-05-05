@@ -1,93 +1,123 @@
 // electron/capture/loopback-recorder.ts
-// Main-process handler for renderer-sent loopback chunks.
-// The renderer uses electron-audio-loopback + MediaRecorder and ships
-// binary chunks here via IPC (capture:loopback-chunk).
+// Native WASAPI loopback capture for system audio recording.
+// Uses the @liz-meet/loopback-capture C++ N-API addon to read the render
+// endpoint mix directly — no renderer involvement, no WebRTC echo-cancellation,
+// no Bluetooth A2DP → HFP profile flip.
 
-import { writeFileSync, mkdirSync, existsSync, openSync, fsyncSync, closeSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { app } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import type { ChunkRepository } from '../db/chunk-repository.js';
+import { notify } from '../ipc/notifier.js';
+import { PUSH_CHANNELS } from '../ipc/channels.js';
 import { logger } from '../logging/logger.js';
 
-const MAX_LOOPBACK_CHUNK_BYTES = 5 * 1024 * 1024; // 5 MB hard cap §4.2.4
+type LoopbackEvent =
+  | { type: 'vu';    rmsDb: number }
+  | { type: 'chunk'; path: string; seq: number; startSeconds: number; endSeconds: number }
+  | { type: 'error'; message: string };
+
+interface NativeLoopback {
+  start(opts: { sessionDir?: string; chunkSeconds?: number; vuIntervalMs?: number },
+        cb: (e: LoopbackEvent) => void): void;
+  stop(): void;
+  isRunning(): boolean;
+}
+
+// Lazy-load so the module fails gracefully on non-Windows at import time
+let _native: NativeLoopback | null = null;
+function getNative(): NativeLoopback | null {
+  if (process.platform !== 'win32') return null;
+  if (!_native) {
+    try {
+      _native = createRequire(import.meta.url)('@liz-meet/loopback-capture') as NativeLoopback;
+    } catch (err) {
+      logger.error({ event: 'loopback_addon_load_failed', err: String(err) });
+    }
+  }
+  return _native;
+}
 
 export class LoopbackRecorder {
   private active = false;
 
-  constructor(private chunkRepo: ChunkRepository) {}
+  constructor(
+    private chunkRepo: ChunkRepository,
+    private win: BrowserWindow,
+  ) {}
 
-  start(): void {
+  start(sessionId: string, chunkSeconds: number): void {
+    if (this.active) return;
+    const native = getNative();
+    if (!native) {
+      logger.warn({ event: 'loopback_unsupported_platform' });
+      return;
+    }
+
+    const sessionDir = path.join(
+      app.getPath('userData'),
+      'recordings',
+      sessionId,
+      'system',
+    );
+
+    logger.info({ event: 'loopback_native_start_begin', sessionDir });
+    native.start({ sessionDir, chunkSeconds, vuIntervalMs: 50 }, (e) => {
+      if (e.type === 'vu') {
+        notify(this.win, PUSH_CHANNELS.CAPTURE_VU_UPDATE, {
+          stream: 'system',
+          rmsDb: e.rmsDb,
+        });
+      } else if (e.type === 'chunk') {
+        this.chunkRepo.create({
+          sessionId,
+          stream: 'system',
+          seq: e.seq,
+          filePath: e.path,
+          startSeconds: e.startSeconds,
+          endSeconds: e.endSeconds,
+        });
+        logger.info({ event: 'loopback_chunk_written', seq: e.seq });
+      } else {
+        logger.error({ event: 'loopback_native_error', message: e.message });
+      }
+    });
+
     this.active = true;
+    logger.info({ event: 'loopback_started', sessionId });
+    logger.info({ event: 'loopback_native_start_done' });
   }
 
   stop(): void {
+    if (!this.active) return;
+    getNative()?.stop();
     this.active = false;
+    logger.info({ event: 'loopback_stopped' });
   }
 
   isActive(): boolean {
     return this.active;
   }
+}
 
-  /**
-   * Handle an incoming loopback chunk from the renderer.
-   * Returns { ok: false, error: { code: 'chunk_too_large' } } if the buffer
-   * exceeds MAX_LOOPBACK_CHUNK_BYTES (security: prevents renderer-compromise
-   * from shipping unbounded ArrayBuffers to main).
-   */
-  handleChunk(payload: {
-    sessionId: string;
-    seq: number;
-    mimeType: string;
-    buffer: ArrayBuffer;
-    startSeconds: number;
-    endSeconds: number;
-  }): { ok: boolean; error?: { code: string } } {
-    if (!this.active) return { ok: false, error: { code: 'not_recording' } };
+// ---- Preview mode (pre-flight VU only, no WAV chunks) ----
 
-    // Validate sessionId is a UUID to prevent path traversal (M-01)
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(payload.sessionId)) {
-      logger.warn({ event: 'loopback_invalid_session_id', seq: payload.seq });
-      return { ok: false, error: { code: 'invalid_session_id' } };
+let previewActive = false;
+
+export function startLoopbackPreview(win: BrowserWindow): void {
+  if (previewActive) return;
+  const native = getNative();
+  if (!native) return;
+  native.start({ vuIntervalMs: 50 }, (e) => {
+    if (e.type === 'vu') {
+      notify(win, PUSH_CHANNELS.CAPTURE_VU_UPDATE, { stream: 'system', rmsDb: e.rmsDb });
     }
+  });
+  previewActive = true;
+}
 
-    if (payload.buffer.byteLength > MAX_LOOPBACK_CHUNK_BYTES) {
-      logger.warn({ event: 'loopback_chunk_oversize', seq: payload.seq });
-      return { ok: false, error: { code: 'chunk_too_large' } };
-    }
-
-    const ext = payload.mimeType.includes('webm') ? 'webm' : 'wav';
-    const dir = path.join(
-      app.getPath('userData'),
-      'recordings',
-      payload.sessionId,
-      'system',
-    );
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-
-    const fileName = `${String(payload.seq).padStart(6, '0')}.${ext}`;
-    const filePath = path.join(dir, fileName);
-
-    const buffer = Buffer.from(payload.buffer);
-    writeFileSync(filePath, buffer);
-
-    // fsync before DB insert (DB-First Write L3)
-    // Windows does not support fsync on a read-only fd
-    if (process.platform !== 'win32') {
-      const fd = openSync(filePath, 'r');
-      fsyncSync(fd);
-      closeSync(fd);
-    }
-
-    // Insert chunks row
-    this.chunkRepo.create({
-      sessionId: payload.sessionId,
-      stream: 'system',
-      seq: payload.seq,
-      filePath,
-      startSeconds: payload.startSeconds,
-      endSeconds: payload.endSeconds,
-    });
-
-    return { ok: true };
-  }
+export function stopLoopbackPreview(): void {
+  if (!previewActive) return;
+  getNative()?.stop();
+  previewActive = false;
 }

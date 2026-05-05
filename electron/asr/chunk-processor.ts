@@ -171,12 +171,14 @@ export class ChunkProcessor {
         if (!shouldRetry(statusCode, attempt)) {
           this.chunkRepo.updateStatus(chunk.id, 'permanently_failed', provErr?.code ?? 'unknown');
           this.finalizer.finalizeIfReady(chunk.sessionId);
-          logger.warn({ event: 'chunk_permanently_failed', chunkId: chunk.id, code: provErr?.code });
+          const errMsg2 = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+          logger.warn({ event: 'chunk_permanently_failed', chunkId: chunk.id, code: provErr?.code, detail: errMsg2 });
           return;
         }
 
         this.chunkRepo.updateStatus(chunk.id, 'failed', provErr?.code ?? 'unknown');
-        logger.warn({ event: 'chunk_upload_failed', chunkId: chunk.id, attempt, code: classifyHttpError(err) });
+        const errMsg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        logger.warn({ event: 'chunk_upload_failed', chunkId: chunk.id, attempt, code: classifyHttpError(err), detail: errMsg });
       }
     }
 

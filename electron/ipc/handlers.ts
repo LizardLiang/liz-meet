@@ -14,9 +14,8 @@ import type { SessionStateMachine } from '../capture/session-state.js';
 import type { apiKeyService as ApiKeyServiceType } from '../services/api-key-service.js';
 import type { PrivacyService } from '../services/privacy-service.js';
 import { runPreflight } from '../capture/preflight.js';
+import { startLoopbackPreview, stopLoopbackPreview } from '../capture/loopback-recorder.js';
 import { NOTICE_VERSION_HASH, NOTICE_TEXT } from '../../src/constants/privacy-notice.js';
-import { notify } from './notifier.js';
-import { PUSH_CHANNELS as PC } from './channels.js';
 import { rmSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { logger } from '../logging/logger.js';
@@ -181,9 +180,14 @@ export function registerHandlers(deps: HandlerDeps): void {
 
   ipcMain.handle(
     CHANNELS.CAPTURE_START,
-    withErrorWrapper(CHANNELS.CAPTURE_START, (_event, args: { title: string; source: 'mic' | 'system' | 'both' }) =>
-      stateMachine.start(args),
-    ),
+    withErrorWrapper(CHANNELS.CAPTURE_START, async (_event, args: { title: string; source: 'mic' | 'system' | 'both' }) => {
+      logger.info({ event: 'capture_start_step', step: 'preview_stop_begin' });
+      stopLoopbackPreview();
+      logger.info({ event: 'capture_start_step', step: 'preview_stop_done' });
+      const result = await stateMachine.start(args);
+      logger.info({ event: 'capture_start_step', step: 'session_started' });
+      return result;
+    }),
   );
 
   ipcMain.handle(
@@ -218,25 +222,17 @@ export function registerHandlers(deps: HandlerDeps): void {
   );
 
   ipcMain.handle(
-    CHANNELS.CAPTURE_LOOPBACK_CHUNK,
-    withErrorWrapper(CHANNELS.CAPTURE_LOOPBACK_CHUNK, (_event, payload: {
-      sessionId: string;
-      seq: number;
-      mimeType: string;
-      buffer: ArrayBuffer;
-      startSeconds: number;
-      endSeconds: number;
-    }) => {
-      const result = stateMachine.getLoopbackRecorder().handleChunk(payload);
-      if (!result.ok) {
-        if (result.error?.code === 'chunk_too_large') {
-          notify(deps.win, PC.CAPTURE_DEVICE_EVENT, {
-            stream: 'system',
-            event: 'chunk_oversize',
-          });
-        }
-        return result;
-      }
+    CHANNELS.CAPTURE_LOOPBACK_PREVIEW_START,
+    withErrorWrapper(CHANNELS.CAPTURE_LOOPBACK_PREVIEW_START, () => {
+      startLoopbackPreview(deps.win);
+      return { ok: true };
+    }),
+  );
+
+  ipcMain.handle(
+    CHANNELS.CAPTURE_LOOPBACK_PREVIEW_STOP,
+    withErrorWrapper(CHANNELS.CAPTURE_LOOPBACK_PREVIEW_STOP, () => {
+      stopLoopbackPreview();
       return { ok: true };
     }),
   );

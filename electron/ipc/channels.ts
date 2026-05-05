@@ -26,8 +26,9 @@ export const CHANNELS = {
   CAPTURE_RESUME:         'capture:resume',
   CAPTURE_STOP:           'capture:stop',
   CAPTURE_STATUS:         'capture:status',
-  CAPTURE_PREFLIGHT:      'capture:preflight',
-  CAPTURE_LOOPBACK_CHUNK: 'capture:loopback-chunk',
+  CAPTURE_PREFLIGHT:           'capture:preflight',
+  CAPTURE_LOOPBACK_PREVIEW_START: 'capture:loopback-preview-start',
+  CAPTURE_LOOPBACK_PREVIEW_STOP:  'capture:loopback-preview-stop',
   // Segments
   SEGMENT_FIND_BY_SESSION: 'segment:findBySession',
   SEGMENT_SEARCH:          'segment:search',
@@ -89,12 +90,6 @@ export interface CaptureStartArgs {
   source: AudioSource;
 }
 
-export interface LoopbackChunkArgs {
-  sessionId: string;
-  seq: number;
-  mimeType: string;
-  buffer: ArrayBuffer;
-}
 
 export interface SegmentSearchArgs {
   query: string;
@@ -151,7 +146,8 @@ export type ChannelReqMap = {
   [CHANNELS.CAPTURE_STOP]:   undefined;
   [CHANNELS.CAPTURE_STATUS]: undefined;
   [CHANNELS.CAPTURE_PREFLIGHT]: undefined;
-  [CHANNELS.CAPTURE_LOOPBACK_CHUNK]: LoopbackChunkArgs;
+  [CHANNELS.CAPTURE_LOOPBACK_PREVIEW_START]: undefined;
+  [CHANNELS.CAPTURE_LOOPBACK_PREVIEW_STOP]:  undefined;
   [CHANNELS.SEGMENT_FIND_BY_SESSION]: { sessionId: string };
   [CHANNELS.SEGMENT_SEARCH]: SegmentSearchArgs;
   [CHANNELS.SPEAKER_LABEL_UPSERT]: SpeakerLabelUpsertArgs;
@@ -180,7 +176,8 @@ export type ChannelResMap = {
   [CHANNELS.CAPTURE_STOP]:   { ok: boolean };
   [CHANNELS.CAPTURE_STATUS]: { state: string };
   [CHANNELS.CAPTURE_PREFLIGHT]: PreflightResult;
-  [CHANNELS.CAPTURE_LOOPBACK_CHUNK]: { ok: boolean };
+  [CHANNELS.CAPTURE_LOOPBACK_PREVIEW_START]: { ok: boolean };
+  [CHANNELS.CAPTURE_LOOPBACK_PREVIEW_STOP]:  { ok: boolean };
   [CHANNELS.SEGMENT_FIND_BY_SESSION]: Segment[];
   [CHANNELS.SEGMENT_SEARCH]: SearchResult[];
   [CHANNELS.SPEAKER_LABEL_UPSERT]: { ok: boolean };

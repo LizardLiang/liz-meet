@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:transcript": "bun scripts/test-transcript.ts",
-    "postinstall": "electron-rebuild -f -w better-sqlite3,naudiodon2 || true"
+    "postinstall": "electron-rebuild -f -w better-sqlite3,naudiodon2,@liz-meet/loopback-capture || true"
   },
   "dependencies": {
     "@electron/rebuild": "^4.0.4",
@@ -22,11 +22,13 @@
     "@grpc/proto-loader": "^0.8.0",
     "@tailwindcss/vite": "^4.1.11",
     "@tanstack/react-virtual": "^3.13.24",
+    "@liz-meet/loopback-capture": "file:./native/loopback-capture",
     "better-sqlite3": "^12.9.0",
     "daisyui": "^5.0.47",
     "electron-audio-loopback": "^1.0.6",
     "electron-updater": "^6.6.2",
     "naudiodon2": "^2.5.0",
+    "node-addon-api": "^8.7.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.14.2",
